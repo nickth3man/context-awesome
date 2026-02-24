@@ -6,75 +6,14 @@ import {
   GetItemsResponse,
   APIError,
 } from './types.js';
-
-interface RawSection {
-  id?: string | number;
-  _id?: string | number;
-  listId?: string;
-  listName?: string;
-  list_name?: string;
-  githubRepo?: string;
-  github_repo?: string;
-  category?: string;
-  section?: string;
-  subcategory?: string;
-  sub_category?: string;
-  itemCount?: number;
-  item_count?: number;
-  confidence?: number;
-  score?: number;
-  description?: string;
-}
-
-interface RawItem {
-  id?: string | number;
-  _id?: string | number;
-  name?: string;
-  title?: string;
-  description?: string;
-  url?: string;
-  link?: string;
-  stars?: number;
-  githubStars?: number;
-  github_stars?: number;
-  repo?: string;
-  githubRepo?: string;
-  github_repo?: string;
-  tags?: string[];
-  lastUpdated?: string;
-  updated_at?: string;
-  last_updated?: string;
-}
-
-interface RawMetadata {
-  listId?: string;
-  list_id?: string;
-  listName?: string;
-  list_name?: string;
-  githubRepo?: string;
-  github_repo?: string;
-  description?: string;
-  totalItems?: number;
-  total_items?: number;
-  section?: string;
-  subcategory?: string;
-  offset?: number;
-  hasMore?: boolean;
-  has_more?: boolean;
-}
-
-interface APIFindSectionResponse {
-  results?: RawSection[];
-  sections?: RawSection[];
-  total?: number;
-}
-
-interface APIGetItemsResponse {
-  items?: RawItem[];
-  data?: RawItem[];
-  metadata?: RawMetadata;
-  meta?: RawMetadata;
-}
+import {
+  RawSection,
+  RawMetadata,
+  APIFindSectionResponse,
+  APIGetItemsResponse,
+} from './api-types.js';
+import { mapSection, mapItem, mapListMetadata } from './api/mappers.js';
+import { estimateTokens, truncateToTokenLimit } from './api/token-utils.js';
 
 export class AwesomeContextAPIClient {
   private baseUrl: string;
@@ -93,6 +32,17 @@ export class AwesomeContextAPIClient {
     }
   }
 
+  private buildHeaders(): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'X-Source': 'context-awesome',
+    };
+    if (this.apiKey) {
+      headers['Authorization'] = `Bearer ${this.apiKey}`;
+    }
+    return headers;
+  }
+
   private async request<T>(
     endpoint: string,
     params?: Record<string, unknown>
@@ -107,15 +57,6 @@ export class AwesomeContextAPIClient {
       });
     }
 
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'X-Source': 'context-awesome',
-    };
-
-    if (this.apiKey) {
-      headers['Authorization'] = `Bearer ${this.apiKey}`;
-    }
-
     this.log(`Request: ${url.toString()}`);
 
     // Add timeout to prevent hanging requests
@@ -125,7 +66,7 @@ export class AwesomeContextAPIClient {
     try {
       const response = await fetch(url.toString(), {
         method: 'GET',
-        headers,
+        headers: this.buildHeaders(),
         signal: controller.signal,
       });
       clearTimeout(timeoutId);
@@ -203,17 +144,7 @@ export class AwesomeContextAPIClient {
     const sections = response.results || response.sections || [];
     
     return {
-      sections: sections.map((section: RawSection) => ({
-        id: String(section.id || section._id || ''),
-        listId: String(section.listId || ''),
-        listName: String(section.listName || section.list_name || ''),
-        githubRepo: String(section.githubRepo || section.github_repo || ''),
-        category: String(section.category || section.section || ''),
-        subcategory: String(section.subcategory || section.sub_category || ''),
-        itemCount: Number(section.itemCount || section.item_count || 0),
-        confidence: Number(section.confidence || section.score || 0),
-        description: String(section.description || ''),
-      })),
+      sections: sections.map((section: RawSection) => mapSection(section)),
       total: Number(response.total || sections.length),
     };
   }
@@ -239,35 +170,20 @@ export class AwesomeContextAPIClient {
     });
 
     const items = response.items || response.data || [];
-    const metadata = response.metadata || response.meta || {};
+    const metadata: RawMetadata = response.metadata || response.meta || {};
     
-    const tokenCount = this.estimateTokens(items);
+    const tokenCount = estimateTokens(items);
     const tokenLimit = params.tokens || 10000;
     const truncated = tokenCount > tokenLimit;
     
     const truncatedItems = truncated 
-      ? this.truncateToTokenLimit(items, tokenLimit)
+      ? truncateToTokenLimit(items, tokenLimit)
       : items;
 
     return {
-      items: truncatedItems.map((item: RawItem) => ({
-        id: String(item.id || item._id || ''),
-        name: String(item.name || item.title || ''),
-        description: String(item.description || ''),
-        url: String(item.url || item.link || ''),
-        githubStars: item.stars ?? item.githubStars ?? item.github_stars,
-        githubRepo: item.repo ?? item.githubRepo ?? item.github_repo,
-        tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
-        lastUpdated: item.lastUpdated ?? item.updated_at ?? item.last_updated,
-      })),
+      items: truncatedItems.map(mapItem),
       metadata: {
-        list: {
-          id: String(metadata.listId || metadata.list_id || params.listId || ''),
-          name: String(metadata.listName || metadata.list_name || ''),
-          githubRepo: String(metadata.githubRepo || metadata.github_repo || params.githubRepo || ''),
-          description: String(metadata.description || ''),
-          totalItems: Number(metadata.totalItems || metadata.total_items || items.length),
-        },
+        list: mapListMetadata(metadata, params, items.length),
         section: metadata.section ?? params.section,
         subcategory: metadata.subcategory ?? params.subcategory,
         totalItems: Number(metadata.totalItems || metadata.total_items || items.length),
@@ -275,31 +191,10 @@ export class AwesomeContextAPIClient {
         hasMore: Boolean(metadata.hasMore || metadata.has_more || false),
       },
       tokenUsage: {
-        used: this.estimateTokens(truncatedItems),
+        used: estimateTokens(truncatedItems),
         limit: tokenLimit,
         truncated,
       },
     };
-  }
-
-  private estimateTokens(items: RawItem[]): number {
-    const text = JSON.stringify(items);
-    return Math.ceil(text.length / 4);
-  }
-
-  private truncateToTokenLimit(items: RawItem[], limit: number): RawItem[] {
-    const result: RawItem[] = [];
-    let currentTokens = 0;
-
-    for (const item of items) {
-      const itemTokens = this.estimateTokens([item]);
-      if (currentTokens + itemTokens > limit) {
-        break;
-      }
-      result.push(item);
-      currentTokens += itemTokens;
-    }
-
-    return result;
   }
 }

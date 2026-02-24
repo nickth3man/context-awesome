@@ -66,14 +66,6 @@ export interface GetItemsResponse {
   };
 }
 
-export interface ServerConfig {
-  transport: 'stdio' | 'http' | 'sse';
-  port: number;
-  apiHost: string;
-  apiKey?: string;
-  debug: boolean;
-}
-
 export interface APIError {
   code: string;
   message: string;
