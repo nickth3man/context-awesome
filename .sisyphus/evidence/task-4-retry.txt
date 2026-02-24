@@ -1,0 +1,47 @@
+=== Task 4: Retry Logic QA Evidence ===
+Date: 2026-02-24T22:13:28.291Z
+
+--- Test 1: 404 does NOT trigger retry ---
+  RETRYABLE_STATUS_CODES: [429, 500, 502, 503, 504]
+  Contains 404: false
+  RESULT: PASS - 404 is NOT retried
+
+--- Test 2: 429 IS in retryable set ---
+  Contains 429: true
+  RESULT: PASS - 429 IS retried
+
+--- Test 3: 5xx transient errors are retried ---
+  Contains 500: true PASS
+  Contains 502: true PASS
+  Contains 503: true PASS
+  Contains 504: true PASS
+
+--- Test 4: Non-retryable codes (400,401,403,404) are NOT retried ---
+  Contains 400: false PASS
+  Contains 401: false PASS
+  Contains 403: false PASS
+  Contains 404: false PASS
+
+--- Test 5: Retry-After header is respected on 429 ---
+  Checks Retry-After header: true
+  Converts seconds to ms: true
+  RESULT: PASS
+
+--- Test 6: AbortError (timeout) is NOT retried ---
+  AbortError throws immediately: true
+  RESULT: PASS
+
+--- Test 7: MAX_RETRIES configuration ---
+  MAX_RETRIES = 3
+  RESULT: PASS
+
+--- Test 8: Exponential backoff values ---
+  RETRY_BACKOFF_MS = [1000, 2000, 4000]
+  RESULT: PASS
+
+--- Test 9: Jest test suite confirmation ---
+  All 68 tests passed (see npm test output above)
+  Including: "should map HTTP 429 to RATE_LIMIT APIError after exhausting retries"
+  RESULT: PASS
+
+=== All QA checks completed ===

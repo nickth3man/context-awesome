@@ -15,6 +15,14 @@ import {
 import { mapSection, mapItem, mapListMetadata } from './api/mappers.js';
 import { estimateTokens, truncateToTokenLimit } from './api/token-utils.js';
 
+const MAX_RETRIES = 3;
+const RETRY_BACKOFF_MS = [1000, 2000, 4000];
+const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
+
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export class AwesomeContextAPIClient {
   private baseUrl: string;
   private apiKey?: string;
@@ -59,77 +67,106 @@ export class AwesomeContextAPIClient {
 
     this.log(`Request: ${url.toString()}`);
 
-    // Add timeout to prevent hanging requests
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      // Add timeout to prevent hanging requests
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: this.buildHeaders(),
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      try {
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: this.buildHeaders(),
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-      const data = await response.json() as Record<string, unknown>;
+        const data = await response.json() as Record<string, unknown>;
 
-      if (!response.ok) {
-        let errorMessage = String(data.message || `HTTP ${response.status}: ${response.statusText}`);
-        let errorCode = String(data.error || 'API_ERROR');
-        
-        // Provide better error messages for specific status codes
-        if (response.status === 429) {
-          errorMessage = 'Rate limited due to too many requests. Please try again later.';
-          errorCode = 'RATE_LIMIT';
-        } else if (response.status === 401) {
-          errorMessage = 'Unauthorized. Please check your API key.';
-          errorCode = 'UNAUTHORIZED';
-        } else if (response.status === 404) {
-          errorMessage = 'The requested resource was not found.';
-          errorCode = 'NOT_FOUND';
-        }
-        
-        const error: APIError = {
-          code: errorCode,
-          message: errorMessage,
-          statusCode: response.status,
-        };
-        throw error;
-      }
+        if (!response.ok) {
+          // Check if this is a retryable status and we have attempts left
+          if (RETRYABLE_STATUS_CODES.has(response.status) && attempt < MAX_RETRIES - 1) {
+            let delayMs = RETRY_BACKOFF_MS[attempt] ?? RETRY_BACKOFF_MS[RETRY_BACKOFF_MS.length - 1];
 
-      this.log(`Response:`, data);
-      return data as T;
-    } catch (error: unknown) {
-      clearTimeout(timeoutId);
-      
-      if (error && typeof error === 'object') {
-        const err = error as Record<string, unknown>;
-        if (err.code && typeof err.code === 'string') {
+            // Respect Retry-After header on 429
+            if (response.status === 429) {
+              const retryAfter = response.headers.get('retry-after');
+              if (retryAfter) {
+                const parsed = Number(retryAfter);
+                if (!isNaN(parsed) && parsed > 0) {
+                  delayMs = parsed * 1000;
+                }
+              }
+            }
+
+            this.log(`Retryable error (HTTP ${response.status}), attempt ${attempt + 1}/${MAX_RETRIES}. Retrying in ${delayMs}ms...`);
+            await sleep(delayMs);
+            continue;
+          }
+
+          let errorMessage = String(data.message || `HTTP ${response.status}: ${response.statusText}`);
+          let errorCode = String(data.error || 'API_ERROR');
+          
+          // Provide better error messages for specific status codes
+          if (response.status === 429) {
+            errorMessage = 'Rate limited due to too many requests. Please try again later.';
+            errorCode = 'RATE_LIMIT';
+          } else if (response.status === 401) {
+            errorMessage = 'Unauthorized. Please check your API key.';
+            errorCode = 'UNAUTHORIZED';
+          } else if (response.status === 404) {
+            errorMessage = 'The requested resource was not found.';
+            errorCode = 'NOT_FOUND';
+          }
+          
+          const error: APIError = {
+            code: errorCode,
+            message: errorMessage,
+            statusCode: response.status,
+          };
           throw error;
         }
+
+        this.log(`Response:`, data);
+        return data as T;
+      } catch (error: unknown) {
+        clearTimeout(timeoutId);
         
-        // Handle timeout specifically
-        if (err.name === 'AbortError') {
+        if (error && typeof error === 'object') {
+          const err = error as Record<string, unknown>;
+          if (err.code && typeof err.code === 'string') {
+            throw error;
+          }
+          
+          // Handle timeout specifically - do NOT retry AbortError
+          if (err.name === 'AbortError') {
+            const apiError: APIError = {
+              code: 'TIMEOUT',
+              message: 'Request timeout after 30 seconds',
+            };
+            throw apiError;
+          }
+          
           const apiError: APIError = {
-            code: 'TIMEOUT',
-            message: 'Request timeout after 30 seconds',
+            code: 'NETWORK_ERROR',
+            message: `Failed to connect to API: ${err.message || String(error)}`,
           };
           throw apiError;
         }
         
         const apiError: APIError = {
           code: 'NETWORK_ERROR',
-          message: `Failed to connect to API: ${err.message || String(error)}`,
+          message: `Failed to connect to API: ${String(error)}`,
         };
         throw apiError;
       }
-      
-      const apiError: APIError = {
-        code: 'NETWORK_ERROR',
-        message: `Failed to connect to API: ${String(error)}`,
-      };
-      throw apiError;
     }
+
+    // TypeScript exhaustiveness: loop always returns or throws, but compiler needs this
+    const exhaustedError: APIError = {
+      code: 'NETWORK_ERROR',
+      message: 'Request failed after maximum retry attempts',
+    };
+    throw exhaustedError;
   }
 
   async findSections(params: FindSectionParams): Promise<FindSectionResponse> {

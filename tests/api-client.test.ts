@@ -327,20 +327,26 @@ describe('AwesomeContextAPIClient', () => {
       expect(fetchOptions.headers).toHaveProperty('Authorization', 'Bearer my-secret-key');
     });
 
-    // Edge Case 6: Rate limit (429) mapping
-    it('should map HTTP 429 to RATE_LIMIT APIError', async () => {
-      fetchMock.mockResolvedValueOnce({
+    // Edge Case 6: Rate limit (429) mapping - now retries 3 times before throwing
+    it('should map HTTP 429 to RATE_LIMIT APIError after exhausting retries', async () => {
+      const make429 = () => ({
         ok: false,
         status: 429,
         statusText: 'Too Many Requests',
+        headers: { get: () => null },
         json: async () => ({}),
       });
+      fetchMock
+        .mockResolvedValueOnce(make429())
+        .mockResolvedValueOnce(make429())
+        .mockResolvedValueOnce(make429());
 
       await expect(client.findSections({ query: 'test' })).rejects.toMatchObject({
         code: 'RATE_LIMIT',
         statusCode: 429,
       });
-    });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    }, 10000);
 
     // Edge Case 7: Unauthorized (401) mapping
     it('should map HTTP 401 to UNAUTHORIZED APIError', async () => {
