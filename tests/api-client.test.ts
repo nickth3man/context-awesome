@@ -251,9 +251,67 @@ describe('AwesomeContextAPIClient', () => {
       expect(response.tokenUsage.limit).toBe(1000);
       expect(response.tokenUsage.used).toBeLessThanOrEqual(1000);
     });
+
+    // Edge Case 4.5: Exhaustive missing optional fields for getItems
+    it('should handle items and metadata with missing optional fields gracefully', async () => {
+      const mockResponse = {
+        items: [
+          {
+            // Missing id, _id, description, stars, githubStars, github_stars, repo, githubRepo, github_repo, tags, lastUpdated, updated_at, last_updated
+            name: 'Minimal Item',
+            url: 'https://minimal.com'
+          },
+        ],
+        metadata: {
+          // Missing listId, list_id, listName, list_name, githubRepo, github_repo, description, totalItems, total_items, section, subcategory, offset, hasMore, has_more
+        }
+      };
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const response = await client.getItems({ listId: 'minimal-list' });
+      
+      expect(response.items.length).toBe(1);
+      const item = response.items[0];
+      expect(item.id).toBe('');
+      expect(item.description).toBe('');
+      expect(item.githubStars).toBeUndefined();
+      expect(item.githubRepo).toBeUndefined();
+      expect(item.tags).toEqual([]);
+      expect(item.lastUpdated).toBeUndefined();
+
+      const meta = response.metadata;
+      expect(meta.list.id).toBe('minimal-list');
+      expect(meta.list.name).toBe('');
+      expect(meta.list.githubRepo).toBe('');
+      expect(meta.list.description).toBe('');
+      expect(meta.list.totalItems).toBe(1);
+      expect(meta.section).toBeUndefined();
+      expect(meta.subcategory).toBeUndefined();
+      expect(meta.totalItems).toBe(1);
+      expect(meta.offset).toBe(0);
+      expect(meta.hasMore).toBe(false);
+    });
   });
 
   describe('HTTP & Network Edge Cases', () => {
+    it('should log when debug is true', async () => {
+      const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const debugClient = new AwesomeContextAPIClient('https://test-api.com', undefined, true);
+      
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ sections: [] }),
+      });
+
+      await debugClient.findSections({ query: 'test' });
+      expect(consoleSpy).toHaveBeenCalledWith('[API Client]', expect.stringContaining('Request:'));
+      consoleSpy.mockRestore();
+    });
+
     // Edge Case 5: API Key included in Authorization header
     it('should include the API Key in the Authorization header if provided', async () => {
       const clientWithKey = new AwesomeContextAPIClient('https://test-api.com', 'my-secret-key', false);
