@@ -1,0 +1,3 @@
+# Run the sync_agents.py script to keep CLAUDE.md and GEMINI.md in sync with AGENTS.md
+python scripts/sync_agents.py
+

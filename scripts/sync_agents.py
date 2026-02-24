@@ -81,15 +81,23 @@ def sync_agents():
                         with open(target_path, "wb") as f:
                             f.write(agents_content)
                         print(f"Updated: {target_path}")
+                        
+                        # Automatically stage the updated file
+                        import subprocess
+                        try:
+                            subprocess.run(["git", "add", target_path], check=True)
+                            print(f"Staged: {target_path}")
+                        except Exception as e:
+                            print(f"Failed to stage {target_path}: {e}")
+                            
                         changed = True
 
             except Exception as e:
                 print(f"Error processing {root}: {e}")
 
     if changed:
-        print("GEMINI.md and CLAUDE.md files were synchronized with AGENTS.md.")
-        print("Please stage the changes and commit again.")
-        sys.exit(1)
+        print("GEMINI.md and CLAUDE.md files were synchronized with AGENTS.md and staged.")
+        sys.exit(0)
     else:
         sys.exit(0)
 
