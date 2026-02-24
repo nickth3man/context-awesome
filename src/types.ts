@@ -71,3 +71,25 @@ export interface APIError {
   message: string;
   statusCode?: number;
 }
+
+export interface ListAwesomeListsParams {
+  limit?: number;
+  offset?: number;
+  category?: string;
+}
+
+export interface AwesomeListSummary {
+  id: string;
+  name: string;
+  githubRepo: string;
+  description?: string;
+  totalItems: number;
+  category?: string;
+}
+
+export interface ListAwesomeListsResponse {
+  lists: AwesomeListSummary[];
+  total: number;
+  offset: number;
+  hasMore: boolean;
+}

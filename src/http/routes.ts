@@ -3,6 +3,34 @@ import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
+// --- Prometheus metrics collector (module-level singleton) ---
+
+const metricsStore = new Map<string, number>();
+
+export function incrementMetric(name: string, labels: Record<string, string>): void {
+  const labelStr = Object.entries(labels)
+    .map(([k, v]) => `${k}="${v}"`)
+    .join(',');
+  const key = `${name}{${labelStr}}`;
+  metricsStore.set(key, (metricsStore.get(key) ?? 0) + 1);
+}
+
+export function handleMetricsRoute(_req: IncomingMessage, res: ServerResponse): void {
+  const lines: string[] = [
+    '# HELP mcp_requests_total Total number of MCP requests',
+    '# TYPE mcp_requests_total counter',
+  ];
+
+  for (const [key, value] of metricsStore) {
+    lines.push(`${key} ${value}`);
+  }
+
+  res.writeHead(200, {
+    'Content-Type': 'text/plain; version=0.0.4; charset=utf-8',
+  });
+  res.end(lines.join('\n') + '\n');
+}
+
 export async function handleMcpRoute(
   _req: IncomingMessage,
   res: ServerResponse,

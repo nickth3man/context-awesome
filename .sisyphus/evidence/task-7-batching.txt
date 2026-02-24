@@ -1,0 +1,22 @@
+Task 7: findSectionsAndItems batching method
+============================================
+
+Status: COMPLETE
+
+Implementation:
+- Added `findSectionsAndItems(params: FindSectionParams, sectionLimit: number = 3)` to `AwesomeContextAPIClient`
+- Method awaits `findSections(params)`, slices top N sections, then runs `Promise.all()` for `getItems` on each
+- Returns `{ sections: FindSectionResponse; itemsBySection: Map<string, GetItemsResponse> }`
+- Map key format: `${listId}:${category}[:${subcategory}]`
+
+Verification:
+- `npm run build` → PASS (tsc, no errors)
+- `npm test` → PASS (68/68 tests, 3 suites)
+
+QA scenario (simulated):
+  client.findSectionsAndItems({ query: "machine learning" }, 2)
+  → Returns object with:
+      sections: { sections: [...], total: N }
+      itemsBySection: Map<string, GetItemsResponse> (up to 2 entries)
+
+Evidence date: 2026-02-24

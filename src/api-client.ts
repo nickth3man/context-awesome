@@ -5,6 +5,10 @@ import {
   FindSectionResponse,
   GetItemsParams,
   GetItemsResponse,
+  ListAwesomeListsParams,
+  ListAwesomeListsResponse,
+  Section,
+  AwesomeItem,
   APIError,
 } from './types.js';
 import {
@@ -276,5 +280,147 @@ export class AwesomeContextAPIClient {
 
     responseCache.set(cacheKey, result);
     return result;
+  }
+
+  /**
+   * Get a random awesome item by searching a broad topic and picking randomly.
+   * Fallback implementation since the backend has no /api/random endpoint.
+   */
+  async getRandomAwesomeItem(topic?: string): Promise<{ section: Section; item: AwesomeItem }> {
+    const broadTopics = [
+      'developer tools', 'machine learning', 'web development', 'python libraries',
+      'javascript frameworks', 'devops', 'security', 'databases', 'cli tools',
+      'rust', 'go', 'data science', 'mobile development', 'cloud computing',
+      'open source', 'design resources', 'testing', 'api development',
+    ];
+
+    const searchQuery = topic || broadTopics[Math.floor(Math.random() * broadTopics.length)];
+
+    // Find sections matching the broad query
+    const sectionsResponse = await this.findSections({
+      query: searchQuery,
+      confidence: 0.2,
+      limit: 20,
+    });
+
+    if (!sectionsResponse.sections || sectionsResponse.sections.length === 0) {
+      const error: APIError = {
+        code: 'NO_RESULTS',
+        message: `No sections found for topic "${searchQuery}". Try a different topic.`,
+      };
+      throw error;
+    }
+
+    // Pick a random section
+    const randomSection = sectionsResponse.sections[
+      Math.floor(Math.random() * sectionsResponse.sections.length)
+    ];
+
+    // Get items from that section
+    const itemsResponse = await this.getItems({
+      listId: randomSection.listId,
+      githubRepo: randomSection.githubRepo,
+      section: randomSection.category,
+      subcategory: randomSection.subcategory,
+      tokens: 5000,
+    });
+
+    if (!itemsResponse.items || itemsResponse.items.length === 0) {
+      const error: APIError = {
+        code: 'NO_ITEMS',
+        message: `No items found in section "${randomSection.category}" from ${randomSection.listName}.`,
+      };
+      throw error;
+    }
+
+    // Pick a random item
+    const randomItem = itemsResponse.items[
+      Math.floor(Math.random() * itemsResponse.items.length)
+    ];
+
+    return { section: randomSection, item: randomItem };
+  }
+
+  async listAwesomeLists(params: ListAwesomeListsParams): Promise<ListAwesomeListsResponse> {
+    this.log('Listing awesome lists with params:', params);
+
+    const queryParams = {
+      limit: params.limit,
+      offset: params.offset,
+      category: params.category,
+    };
+    const cacheKey = buildCacheKey('/api/lists', queryParams);
+
+    const cached = responseCache.get(cacheKey);
+    if (cached !== undefined) {
+      this.log('Cache hit for:', cacheKey);
+      return cached as ListAwesomeListsResponse;
+    }
+
+    try {
+      const response = await this.request<Record<string, unknown>>('/api/lists', queryParams);
+
+      // If the backend supports the endpoint, map the response
+      const lists = (response.lists || response.results || response.data || []) as Array<Record<string, unknown>>;
+      const result: ListAwesomeListsResponse = {
+        lists: lists.map((item) => ({
+          id: String(item.id || item._id || ''),
+          name: String(item.name || item.listName || item.list_name || ''),
+          githubRepo: String(item.githubRepo || item.github_repo || ''),
+          description: item.description ? String(item.description) : undefined,
+          totalItems: Number(item.totalItems || item.total_items || item.itemCount || item.item_count || 0),
+          category: item.category ? String(item.category) : undefined,
+        })),
+        total: Number(response.total || lists.length),
+        offset: Number(response.offset || params.offset || 0),
+        hasMore: Boolean(response.hasMore || response.has_more || false),
+      };
+
+      responseCache.set(cacheKey, result);
+      return result;
+    } catch (error: unknown) {
+      const apiError = error as APIError;
+
+      // If 404, the backend doesn't support this endpoint yet
+      if (apiError.statusCode === 404) {
+        return {
+          lists: [],
+          total: 0,
+          offset: 0,
+          hasMore: false,
+        };
+      }
+
+      throw error;
+    }
+  }
+
+  async findSectionsAndItems(
+    params: FindSectionParams,
+    sectionLimit: number = 3
+  ): Promise<{ sections: FindSectionResponse; itemsBySection: Map<string, GetItemsResponse> }> {
+    this.log('findSectionsAndItems with params:', params, 'sectionLimit:', sectionLimit);
+
+    const sections = await this.findSections(params);
+    const topSections = sections.sections.slice(0, sectionLimit);
+
+    const itemResults = await Promise.all(
+      topSections.map(section =>
+        this.getItems({
+          listId: section.listId,
+          githubRepo: section.githubRepo,
+          section: section.category,
+          subcategory: section.subcategory,
+        })
+      )
+    );
+
+    const itemsBySection = new Map<string, GetItemsResponse>();
+    topSections.forEach((section, index) => {
+      const key = `${section.listId}:${section.category}${section.subcategory ? ':' + section.subcategory : ''}`;
+      itemsBySection.set(key, itemResults[index]);
+    });
+
+    return { sections, itemsBySection };
   }
 }

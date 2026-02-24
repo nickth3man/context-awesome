@@ -37,3 +37,41 @@
 - `lru<unknown>(100, 300000)` — 100 items max, 5 min TTL. Generic type param works fine
 - Cached response is the fully-mapped result object, not the raw API response — avoids re-mapping on cache hit
 - Second call clocks at ~0.03ms vs ~3600ms for first network call — 100,000x speedup
+
+## Task 7: findSectionsAndItems batching convenience method (2026-02-24)
+
+- Pattern: call findSections first, slice top N, then Promise.all getItems in parallel
+- Map key format: '${listId}:${category}[:${subcategory}]' — uniquely identifies a section result
+- Both listId AND githubRepo are passed to getItems — the client validates that at least one is provided
+- Return type uses Map<string, GetItemsResponse> — callers can iterate sections.sections and lookup results
+- This is an internal helper only — not registered as MCP tool
+
+## Task 10: Prometheus /metrics endpoint (2026-02-24)
+
+- Module-level Map<string, number> works well as a simple Prometheus counter store — no external dependency needed
+- Prometheus text exposition format requires Content-Type: `text/plain; version=0.0.4; charset=utf-8`
+- Each metric line uses format: `metric_name{label1="val1",label2="val2"} numeric_value`
+- `# HELP` and `# TYPE` lines must precede the metric data lines
+- incrementMetric builds a composite key from name + serialized labels — simple and effective for hand-rolled counters
+- /metrics was already in the rate-limit exemptPaths array from the prior rate-limiting task — no extra work needed
+- The edit tool struggles with literal backslash-n in string arguments — using Write tool for files containing newline-in-strings is more reliable
+
+## Task 8: list_awesome_lists MCP tool (2026-02-24)
+
+- Backend API does NOT support a list-browsing endpoint — `/api/lists` timed out, `/api/awesome-lists` and `/api/list-awesome-lists` returned 404
+- Graceful fallback pattern: catch 404 in `listAwesomeLists()` method and return empty `{ lists: [], total: 0, offset: 0, hasMore: false }` — tool then shows a helpful message suggesting `find_awesome_section`
+- Tool still calls the backend on every invocation (with LRU cache) — if the endpoint is added later, it will automatically work without code changes
+- New types added to `types.ts`: `ListAwesomeListsParams`, `AwesomeListSummary`, `ListAwesomeListsResponse`
+- Registration pattern: import `registerListAwesomeListsTool` in `mcp-server.ts` and call it with `(server, apiClient)`
+- The formatter function (`formatListResults`) is kept local to the tool file — no shared formatter needed since the output format is unique to this tool
+
+## Task 9: random_awesome_item MCP tool (2026-02-24)
+
+- Backend API has no /api/random or /api/trending endpoint (both return 404)
+- Fallback approach: reuse findSections + getItems to simulate random discovery
+- 18 broad topics hardcoded as fallback pool: developer tools, ML, web dev, python, JS, devops, security, databases, etc.
+- Low confidence threshold (0.2) + high limit (20) gives diverse section pool for random picking
+- Math.floor(Math.random() * arr.length) for random selection — simple and sufficient
+- Inline import types in return signatures (import("./types.js").Section) cause tsc errors — must import types at top of file instead
+- Tool pattern: register function takes (McpServer, AwesomeContextAPIClient), uses server.registerTool() with zod schema
+- Optional zod params: z.string().optional().describe(...) — no .default() needed for optional string

@@ -2,6 +2,8 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AwesomeContextAPIClient } from "./api-client.js";
 import { registerFindAwesomeSectionTool } from "./tools/find-section.js";
 import { registerGetAwesomeItemsTool } from "./tools/get-items.js";
+import { registerRandomAwesomeItemTool } from "./tools/random-awesome-item.js";
+import { registerListAwesomeListsTool } from "./tools/list-awesome-lists.js";
 
 // Function to create a new server instance with all tools registered
 export function createServerInstance(
@@ -26,6 +28,8 @@ export function createServerInstance(
   // Register tools
   registerFindAwesomeSectionTool(server, apiClient);
   registerGetAwesomeItemsTool(server, apiClient);
+  registerRandomAwesomeItemTool(server, apiClient);
+  registerListAwesomeListsTool(server, apiClient);
 
   return server;
 }
