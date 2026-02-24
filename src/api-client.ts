@@ -7,6 +7,75 @@ import {
   APIError,
 } from './types.js';
 
+interface RawSection {
+  id?: string | number;
+  _id?: string | number;
+  listId?: string;
+  listName?: string;
+  list_name?: string;
+  githubRepo?: string;
+  github_repo?: string;
+  category?: string;
+  section?: string;
+  subcategory?: string;
+  sub_category?: string;
+  itemCount?: number;
+  item_count?: number;
+  confidence?: number;
+  score?: number;
+  description?: string;
+}
+
+interface RawItem {
+  id?: string | number;
+  _id?: string | number;
+  name?: string;
+  title?: string;
+  description?: string;
+  url?: string;
+  link?: string;
+  stars?: number;
+  githubStars?: number;
+  github_stars?: number;
+  repo?: string;
+  githubRepo?: string;
+  github_repo?: string;
+  tags?: string[];
+  lastUpdated?: string;
+  updated_at?: string;
+  last_updated?: string;
+}
+
+interface RawMetadata {
+  listId?: string;
+  list_id?: string;
+  listName?: string;
+  list_name?: string;
+  githubRepo?: string;
+  github_repo?: string;
+  description?: string;
+  totalItems?: number;
+  total_items?: number;
+  section?: string;
+  subcategory?: string;
+  offset?: number;
+  hasMore?: boolean;
+  has_more?: boolean;
+}
+
+interface APIFindSectionResponse {
+  results?: RawSection[];
+  sections?: RawSection[];
+  total?: number;
+}
+
+interface APIGetItemsResponse {
+  items?: RawItem[];
+  data?: RawItem[];
+  metadata?: RawMetadata;
+  meta?: RawMetadata;
+}
+
 export class AwesomeContextAPIClient {
   private baseUrl: string;
   private apiKey?: string;
@@ -18,7 +87,7 @@ export class AwesomeContextAPIClient {
     this.debug = debug;
   }
 
-  private log(...args: any[]) {
+  private log(...args: unknown[]) {
     if (this.debug) {
       console.error('[API Client]', ...args);
     }
@@ -26,7 +95,7 @@ export class AwesomeContextAPIClient {
 
   private async request<T>(
     endpoint: string,
-    params?: Record<string, any>
+    params?: Record<string, unknown>
   ): Promise<T> {
     const url = new URL(`${this.baseUrl}${endpoint}`);
     
@@ -61,11 +130,11 @@ export class AwesomeContextAPIClient {
       });
       clearTimeout(timeoutId);
 
-      const data = await response.json() as any;
+      const data = await response.json() as Record<string, unknown>;
 
       if (!response.ok) {
-        let errorMessage = data.message || `HTTP ${response.status}: ${response.statusText}`;
-        let errorCode = data.error || 'API_ERROR';
+        let errorMessage = String(data.message || `HTTP ${response.status}: ${response.statusText}`);
+        let errorCode = String(data.error || 'API_ERROR');
         
         // Provide better error messages for specific status codes
         if (response.status === 429) {
@@ -89,25 +158,34 @@ export class AwesomeContextAPIClient {
 
       this.log(`Response:`, data);
       return data as T;
-    } catch (error: any) {
+    } catch (error: unknown) {
       clearTimeout(timeoutId);
       
-      if (error.code) {
-        throw error;
-      }
-      
-      // Handle timeout specifically
-      if (error.name === 'AbortError') {
+      if (error && typeof error === 'object') {
+        const err = error as Record<string, unknown>;
+        if (err.code && typeof err.code === 'string') {
+          throw error;
+        }
+        
+        // Handle timeout specifically
+        if (err.name === 'AbortError') {
+          const apiError: APIError = {
+            code: 'TIMEOUT',
+            message: 'Request timeout after 30 seconds',
+          };
+          throw apiError;
+        }
+        
         const apiError: APIError = {
-          code: 'TIMEOUT',
-          message: 'Request timeout after 30 seconds',
+          code: 'NETWORK_ERROR',
+          message: `Failed to connect to API: ${err.message || String(error)}`,
         };
         throw apiError;
       }
       
       const apiError: APIError = {
         code: 'NETWORK_ERROR',
-        message: `Failed to connect to API: ${error.message}`,
+        message: `Failed to connect to API: ${String(error)}`,
       };
       throw apiError;
     }
@@ -116,28 +194,27 @@ export class AwesomeContextAPIClient {
   async findSections(params: FindSectionParams): Promise<FindSectionResponse> {
     this.log('Finding sections with params:', params);
     
-    const response = await this.request<any>('/api/find-section', {
-      query: params.query,  // Changed from 'q' to 'query'
+    const response = await this.request<APIFindSectionResponse>('/api/find-section', {
+      query: params.query,
       confidence: params.confidence,
       limit: params.limit,
     });
 
-    // Handle both 'results' and 'sections' response formats
     const sections = response.results || response.sections || [];
     
     return {
-      sections: sections.map((section: any) => ({
-        id: section.id || section._id || '',
-        listId: section.listId || '',
-        listName: section.listName || section.list_name || '',
-        githubRepo: section.githubRepo || section.github_repo || '',
-        category: section.category || section.section || '',
-        subcategory: section.subcategory || section.sub_category || '',
-        itemCount: section.itemCount || section.item_count || 0,
-        confidence: section.confidence || section.score || 0,
-        description: section.description || '',
+      sections: sections.map((section: RawSection) => ({
+        id: String(section.id || section._id || ''),
+        listId: String(section.listId || ''),
+        listName: String(section.listName || section.list_name || ''),
+        githubRepo: String(section.githubRepo || section.github_repo || ''),
+        category: String(section.category || section.section || ''),
+        subcategory: String(section.subcategory || section.sub_category || ''),
+        itemCount: Number(section.itemCount || section.item_count || 0),
+        confidence: Number(section.confidence || section.score || 0),
+        description: String(section.description || ''),
       })),
-      total: response.total || sections.length,
+      total: Number(response.total || sections.length),
     };
   }
 
@@ -152,7 +229,7 @@ export class AwesomeContextAPIClient {
       throw error;
     }
 
-    const response = await this.request<any>('/api/get-items', {
+    const response = await this.request<APIGetItemsResponse>('/api/get-items', {
       listId: params.listId,
       githubRepo: params.githubRepo,
       section: params.section,
@@ -173,29 +250,29 @@ export class AwesomeContextAPIClient {
       : items;
 
     return {
-      items: truncatedItems.map((item: any) => ({
-        id: item.id || item._id || '',
-        name: item.name || item.title || '',
-        description: item.description || '',
-        url: item.url || item.link || '',
-        githubStars: item.stars || item.githubStars || item.github_stars,
-        githubRepo: item.repo || item.githubRepo || item.github_repo,
-        tags: item.tags || [],
-        lastUpdated: item.lastUpdated || item.updated_at || item.last_updated,
+      items: truncatedItems.map((item: RawItem) => ({
+        id: String(item.id || item._id || ''),
+        name: String(item.name || item.title || ''),
+        description: String(item.description || ''),
+        url: String(item.url || item.link || ''),
+        githubStars: item.stars ?? item.githubStars ?? item.github_stars,
+        githubRepo: item.repo ?? item.githubRepo ?? item.github_repo,
+        tags: Array.isArray(item.tags) ? item.tags.map(String) : [],
+        lastUpdated: item.lastUpdated ?? item.updated_at ?? item.last_updated,
       })),
       metadata: {
         list: {
-          id: metadata.listId || metadata.list_id || params.listId || '',
-          name: metadata.listName || metadata.list_name || '',
-          githubRepo: metadata.githubRepo || metadata.github_repo || params.githubRepo || '',
-          description: metadata.description || '',
-          totalItems: metadata.totalItems || metadata.total_items || items.length,
+          id: String(metadata.listId || metadata.list_id || params.listId || ''),
+          name: String(metadata.listName || metadata.list_name || ''),
+          githubRepo: String(metadata.githubRepo || metadata.github_repo || params.githubRepo || ''),
+          description: String(metadata.description || ''),
+          totalItems: Number(metadata.totalItems || metadata.total_items || items.length),
         },
-        section: metadata.section || params.section,
-        subcategory: metadata.subcategory || params.subcategory,
-        totalItems: metadata.totalItems || metadata.total_items || items.length,
-        offset: metadata.offset || params.offset || 0,
-        hasMore: metadata.hasMore || metadata.has_more || false,
+        section: metadata.section ?? params.section,
+        subcategory: metadata.subcategory ?? params.subcategory,
+        totalItems: Number(metadata.totalItems || metadata.total_items || items.length),
+        offset: Number(metadata.offset || params.offset || 0),
+        hasMore: Boolean(metadata.hasMore || metadata.has_more || false),
       },
       tokenUsage: {
         used: this.estimateTokens(truncatedItems),
@@ -205,13 +282,13 @@ export class AwesomeContextAPIClient {
     };
   }
 
-  private estimateTokens(items: any[]): number {
+  private estimateTokens(items: RawItem[]): number {
     const text = JSON.stringify(items);
     return Math.ceil(text.length / 4);
   }
 
-  private truncateToTokenLimit(items: any[], limit: number): any[] {
-    const result: any[] = [];
+  private truncateToTokenLimit(items: RawItem[], limit: number): RawItem[] {
+    const result: RawItem[] = [];
     let currentTokens = 0;
 
     for (const item of items) {
