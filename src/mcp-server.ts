@@ -92,7 +92,7 @@ For ambiguous queries, multiple relevant sections will be returned for the user 
               section.subcategory ? ` > ${section.subcategory}` : ""
             }
 
-- **Repository**: `${section.githubRepo}`
+- **Repository**: \`${section.githubRepo}\`
 - **GitHub URL**: ${githubUrl}
 - **Section URL**: ${sectionUrl}
 - **Items**: ${section.itemCount}
@@ -102,9 +102,7 @@ For ambiguous queries, multiple relevant sections will be returned for the user 
               `A curated collection of ${section.itemCount} ${section.category.toLowerCase()} resources from ${section.listName}`
             }`;
           })
-          .join("
-
-");
+          .join("\n\n");
 
         return {
           content: [
@@ -120,9 +118,9 @@ ${formattedSections}
 
 ## How to retrieve items
 
-To get detailed items from any section above, use the `get_awesome_items` tool with:
-- **githubRepo**: The repository path (e.g., `"${response.sections[0]?.githubRepo || "repo/name"}"`)
-- **section** (optional): The category name to filter results (e.g., `"${response.sections[0]?.category || "Section Name"}"`)
+To get detailed items from any section above, use the \`get_awesome_items\` tool with:
+- **githubRepo**: The repository path (e.g., \`"${response.sections[0]?.githubRepo || "repo/name"}"\`)
+- **section** (optional): The category name to filter results (e.g., \`"${response.sections[0]?.category || "Section Name"}"\`)
 - **tokens** (optional): Maximum tokens to return (default: 10000)
 - **offset** (optional): For pagination (default: 0)
 
@@ -222,70 +220,47 @@ Higher confidence scores indicate better matches for your search query.`,
           `# ${metadata.list.name}` +
           (metadata.section ? ` - ${metadata.section}` : "") +
           (metadata.subcategory ? ` > ${metadata.subcategory}` : "") +
-          "
-
-";
+          "\n\n";
 
         const listDescription = metadata.list.description
-          ? `> ${metadata.list.description}
-
-`
+          ? `> ${metadata.list.description}\n\n`
           : "";
 
         const formattedItems = items
           .map((item, index) => {
-            let itemText = `## ${index + 1}. ${item.name}
-
-`;
+            let itemText = `## ${index + 1}. ${item.name}\n\n`;
             
             if (item.description) {
-              itemText += `${item.description}
-
-`;
+              itemText += `${item.description}\n\n`;
             }
             
-            itemText += `**URL**: ${item.url}
-`;
+            itemText += `**URL**: ${item.url}\n`;
             
             if (item.githubRepo) {
-              itemText += `**GitHub**: https://github.com/${item.githubRepo}
-`;
+              itemText += `**GitHub**: https://github.com/${item.githubRepo}\n`;
             }
             
             if (item.githubStars) {
-              itemText += `**Stars**: ${item.githubStars.toLocaleString()}
-`;
+              itemText += `**Stars**: ${item.githubStars.toLocaleString()}\n`;
             }
             
             if (item.tags && item.tags.length > 0) {
-              itemText += `**Tags**: ${item.tags.join(", ")}
-`;
+              itemText += `**Tags**: ${item.tags.join(", ")}\n`;
             }
             
             return itemText;
           })
-          .join("
----
-
-");
+          .join("\n---\n\n");
 
         const footer =
-          `
----
-
-` +
-          `## Metadata
-
-` +
+          `\n---\n\n` +
+          `## Metadata\n\n` +
           `- **Token usage**: ${tokenUsage.used.toLocaleString()}/${tokenUsage.limit.toLocaleString()}` +
           (tokenUsage.truncated ? " (truncated)" : "") +
-          "
-" +
-          `- **Items displayed**: ${items.length} of ${metadata.totalItems}
-` +
+          "\n" +
+          `- **Items displayed**: ${items.length} of ${metadata.totalItems}\n` +
           (metadata.hasMore
-            ? `- **Next page**: Use `offset: ${metadata.offset + items.length}` to get more items
-`
+            ? `- **Next page**: Use \`offset: ${metadata.offset + items.length}\` to get more items\n`
             : "");
 
         return {
