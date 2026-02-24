@@ -1,4 +1,5 @@
 import fetch from 'node-fetch';
+import { lru } from 'tiny-lru';
 import {
   FindSectionParams,
   FindSectionResponse,
@@ -21,6 +22,24 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Module-level LRU cache singleton: 100 items, 5 min TTL
+const responseCache = lru<unknown>(100, 300000);
+
+function buildCacheKey(endpoint: string, params?: Record<string, unknown>): string {
+  if (!params) return endpoint;
+  const sorted = Object.entries(params)
+    .filter(([, v]) => v !== undefined && v !== null)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${String(v)}`)
+    .join('&');
+  return sorted ? `${endpoint}?${sorted}` : endpoint;
+}
+
+/** Clear the response cache. Exported for testing. */
+export function clearResponseCache(): void {
+  responseCache.clear();
 }
 
 export class AwesomeContextAPIClient {
@@ -171,24 +190,36 @@ export class AwesomeContextAPIClient {
 
   async findSections(params: FindSectionParams): Promise<FindSectionResponse> {
     this.log('Finding sections with params:', params);
-    
-    const response = await this.request<APIFindSectionResponse>('/api/find-section', {
+
+    const queryParams = {
       query: params.query,
       confidence: params.confidence,
       limit: params.limit,
-    });
+    };
+    const cacheKey = buildCacheKey('/api/find-section', queryParams);
+
+    const cached = responseCache.get(cacheKey);
+    if (cached !== undefined) {
+      this.log('Cache hit for:', cacheKey);
+      return cached as FindSectionResponse;
+    }
+
+    const response = await this.request<APIFindSectionResponse>('/api/find-section', queryParams);
 
     const sections = response.results || response.sections || [];
-    
-    return {
+
+    const result: FindSectionResponse = {
       sections: sections.map((section: RawSection) => mapSection(section)),
       total: Number(response.total || sections.length),
     };
+
+    responseCache.set(cacheKey, result);
+    return result;
   }
 
   async getItems(params: GetItemsParams): Promise<GetItemsResponse> {
     this.log('Getting items with params:', params);
-    
+
     if (!params.listId && !params.githubRepo) {
       const error: APIError = {
         code: 'INVALID_PARAMS',
@@ -197,27 +228,36 @@ export class AwesomeContextAPIClient {
       throw error;
     }
 
-    const response = await this.request<APIGetItemsResponse>('/api/get-items', {
+    const queryParams = {
       listId: params.listId,
       githubRepo: params.githubRepo,
       section: params.section,
       subcategory: params.subcategory,
       limit: params.tokens ? Math.floor(params.tokens / 50) : undefined,
       offset: params.offset,
-    });
+    };
+    const cacheKey = buildCacheKey('/api/get-items', queryParams);
+
+    const cached = responseCache.get(cacheKey);
+    if (cached !== undefined) {
+      this.log('Cache hit for:', cacheKey);
+      return cached as GetItemsResponse;
+    }
+
+    const response = await this.request<APIGetItemsResponse>('/api/get-items', queryParams);
 
     const items = response.items || response.data || [];
     const metadata: RawMetadata = response.metadata || response.meta || {};
-    
+
     const tokenCount = estimateTokens(items);
     const tokenLimit = params.tokens || 10000;
     const truncated = tokenCount > tokenLimit;
-    
-    const truncatedItems = truncated 
+
+    const truncatedItems = truncated
       ? truncateToTokenLimit(items, tokenLimit)
       : items;
 
-    return {
+    const result: GetItemsResponse = {
       items: truncatedItems.map(mapItem),
       metadata: {
         list: mapListMetadata(metadata, params, items.length),
@@ -233,5 +273,8 @@ export class AwesomeContextAPIClient {
         truncated,
       },
     };
+
+    responseCache.set(cacheKey, result);
+    return result;
   }
 }

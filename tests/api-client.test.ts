@@ -7,7 +7,7 @@ jest.unstable_mockModule('node-fetch', () => {
 });
 
 const fetchMock = (await import('node-fetch')).default as jest.Mock;
-const { AwesomeContextAPIClient } = await import('../src/api-client.js');
+const { AwesomeContextAPIClient, clearResponseCache } = await import('../src/api-client.js');
 
 describe('AwesomeContextAPIClient', () => {
   let client: InstanceType<typeof AwesomeContextAPIClient>;
@@ -15,6 +15,7 @@ describe('AwesomeContextAPIClient', () => {
   beforeEach(() => {
     client = new AwesomeContextAPIClient('https://test-api.com', 'test-key', false);
     jest.clearAllMocks();
+    clearResponseCache();
   });
 
   describe('findSections', () => {
