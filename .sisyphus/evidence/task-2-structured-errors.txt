@@ -1,0 +1,29 @@
+Task 2: Structured Errors - isError: true flag added to tool failure responses
+=============================================================================
+Date: 2026-02-24
+
+VERIFICATION: grep for isError in modified files
+-------------------------------------------------
+src/tools/find-section.ts:65:            isError: true,   <- no-results condition
+src/tools/find-section.ts:86:          isError: true,     <- catch block
+
+src/tools/get-items.ts:59:          isError: true,        <- missing listId/githubRepo
+src/tools/get-items.ts:81:            isError: true,      <- no-items condition
+src/tools/get-items.ts:102:          isError: true,       <- catch block
+
+Total: 5 error/failure return paths updated across 2 files.
+
+BUILD: npm run build - PASSED (tsc exits cleanly, no errors)
+
+LOCATIONS MODIFIED:
+  find-section.ts:
+    - Lines 57-67: "No sections found" (no results condition) → isError: true added
+    - Lines 76-87: catch block → isError: true added
+
+  get-items.ts:
+    - Lines 51-60: Missing listId/githubRepo validation → isError: true added
+    - Lines 72-82: "No items found" condition → isError: true added
+    - Lines 91-103: catch block → isError: true added
+
+RESULT: isError: true is now present in all error/failure responses. MCP clients
+that inspect CallToolResult.isError will correctly detect tool failures.

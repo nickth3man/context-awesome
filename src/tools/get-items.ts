@@ -56,6 +56,7 @@ export function registerGetAwesomeItemsTool(
               text: "Either listId or githubRepo must be provided. Use 'find_awesome_section' first to discover available lists and sections.",
             },
           ],
+          isError: true,
         };
       }
 
@@ -77,6 +78,7 @@ export function registerGetAwesomeItemsTool(
                 text: "No items found for the specified criteria. Try adjusting your filters or use find_awesome_section to discover available sections.",
               },
             ],
+            isError: true,
           };
         }
 
@@ -97,6 +99,7 @@ export function registerGetAwesomeItemsTool(
               text: apiError.message || "Failed to retrieve items. Please check your parameters and try again.",
             },
           ],
+          isError: true,
         };
       }
     }

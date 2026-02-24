@@ -62,6 +62,7 @@ For ambiguous queries, multiple relevant sections will be returned for the user 
                 text: `No sections found matching "${query}". Try different search terms or browse available lists.`,
               },
             ],
+            isError: true,
           };
         }
 
@@ -82,6 +83,7 @@ For ambiguous queries, multiple relevant sections will be returned for the user 
               text: apiError.message || "Failed to search for sections. Please try again.",
             },
           ],
+          isError: true,
         };
       }
     }
