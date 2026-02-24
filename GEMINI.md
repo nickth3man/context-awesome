@@ -1,4 +1,4 @@
-# CLAUDE.md
+# AGENTS.md
 
 > **Purpose:** This file exists to correct consistent agent mistakes and specify required tooling — nothing more.
 > Do NOT auto-generate or expand this file. If you encounter something surprising or confusing in this codebase,
@@ -11,10 +11,9 @@
 <!-- PLACEHOLDER: List only the non-obvious tools the agent must use.
      Example: "Always use pnpm (not npm or yarn) to run scripts."
      If the tool is detectable from package.json or config files, omit it. -->
-
-- [ ] `[package manager]` — always use `[command]` to run scripts
-- [ ] `[type checker / linter]` — run after every change: `[command]`
-- [ ] `[test runner]` — run affected tests before marking a task complete: `[command]`
+- [x] `npm` — always use `npm` to run scripts (not yarn or pnpm)
+- [x] `tsc` — run after every change: `npm run build`
+- [x] `jest` — run affected tests before marking a task complete: `npm test`
 
 ---
 
@@ -23,11 +22,10 @@
 <!-- PLACEHOLDER: Only add entries here when the agent repeatedly makes the same error
      despite the codebase structure making the correct path clear.
      Each entry should be a single, specific correction. -->
-
-<!-- Example format:
-- DO NOT use [X pattern/library] — use [Y] instead. Reason: [one sentence].
-- Always run `[command]` after modifying [area of codebase].
--->
+- DO NOT edit `CLAUDE.md` or `GEMINI.md` directly — edit `AGENTS.md` instead. Reason: pre-commit hook syncs AGENTS.md to both files automatically.
+- DO NOT use CommonJS (`require`, `module.exports`) — use ESM (`import`/`export`). Reason: `"type": "module"` in package.json.
+- Always use `.js` extensions in TypeScript import paths (e.g., `import { foo } from "./bar.js"`). Reason: Node ESM resolution requires it.
+- DO NOT use `fetch` from globals — use `node-fetch`. Reason: explicit dependency used throughout the codebase.
 
 ---
 
@@ -35,10 +33,7 @@
 
 <!-- PLACEHOLDER: List technologies still present in the codebase but no longer preferred.
      This prevents the agent from reaching for outdated patterns it finds in older files. -->
-
-<!-- Example:
-- `[TechA]` — legacy only, exists in [/path]. Do not use for new code; prefer [TechB].
--->
+- No legacy technologies identified. This is a young (v0.1.0) codebase.
 
 ---
 
@@ -51,6 +46,9 @@
      - "This app has no production users yet. Don't generate data migration scripts."
      - "All new features must be backward-compatible — production data exists."
 -->
+- This project is early-stage (v0.1.0). Schema changes and API surface changes are welcome.
+- The MCP server is a thin client — it connects to an external backend API (`api.context-awesome.com`) for all data. Do not implement data storage or awesome-list parsing locally.
+- The backend API is not open-sourced. Do not assume you can modify it; treat it as a third-party service.
 
 ---
 
