@@ -12,8 +12,11 @@ export function setCorsHeaders(res: ServerResponse): void {
 }
 
 export function extractApiKey(req: IncomingMessage): string | undefined {
+  // Node.js lowercases all incoming HTTP headers, so only lowercase keys are checked here.
   return (
     extractBearerToken(req.headers.authorization) ||
-    extractHeaderValue(req.headers['x-awesome-context-api-key'])
+    extractHeaderValue(req.headers['x-awesome-context-api-key']) ||
+    extractHeaderValue(req.headers['context-awesome-api-key']) ||
+    extractHeaderValue(req.headers['x-api-key'])
   );
 }

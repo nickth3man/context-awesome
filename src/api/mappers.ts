@@ -1,5 +1,5 @@
-import { Section, AwesomeItem, GetItemsParams } from '../types.js';
-import { RawSection, RawItem, RawMetadata } from '../api-types.js';
+import { Section, AwesomeItem, GetItemsParams, ListMetadata } from '../types.js';
+import { RawSection, RawItem, RawMetadata, RawList } from '../api-types.js';
 
 export function mapSection(section: RawSection): Section {
   return {
@@ -39,5 +39,15 @@ export function mapListMetadata(
     githubRepo: String(metadata.githubRepo || metadata.github_repo || params.githubRepo || ''),
     description: String(metadata.description || ''),
     totalItems: Number(metadata.totalItems || metadata.total_items || itemCount),
+  };
+}
+
+export function mapList(list: RawList): ListMetadata {
+  return {
+    id: String(list.id || list._id || ''),
+    name: String(list.name || ''),
+    githubRepo: String(list.githubRepo || list.github_repo || ''),
+    description: String(list.description || '') || undefined,
+    totalItems: Number(list.itemCount || list.item_count || 0),
   };
 }

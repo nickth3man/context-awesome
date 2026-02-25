@@ -72,6 +72,27 @@ export interface APIError {
   statusCode?: number;
 }
 
+export interface SectionWithItems {
+  section: Section;
+  items: AwesomeItem[];
+  tokenUsage: {
+    used: number;
+    limit: number;
+    truncated: boolean;
+  };
+}
+
+export interface FindSectionsAndItemsResponse {
+  sections: Section[];
+  itemsPerSection: SectionWithItems[];
+  totalSections: number;
+}
+
+export interface ListListsResponse {
+  lists: ListMetadata[];
+  total: number;
+}
+
 export interface ListAwesomeListsParams {
   limit?: number;
   offset?: number;

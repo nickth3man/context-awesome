@@ -4,6 +4,7 @@ import { registerFindAwesomeSectionTool } from "./tools/find-section.js";
 import { registerGetAwesomeItemsTool } from "./tools/get-items.js";
 import { registerRandomAwesomeItemTool } from "./tools/random-awesome-item.js";
 import { registerListAwesomeListsTool } from "./tools/list-awesome-lists.js";
+import { registerFindAndGetTool } from "./tools/find-and-get.js";
 
 // Function to create a new server instance with all tools registered
 export function createServerInstance(
@@ -30,6 +31,7 @@ export function createServerInstance(
   registerGetAwesomeItemsTool(server, apiClient);
   registerRandomAwesomeItemTool(server, apiClient);
   registerListAwesomeListsTool(server, apiClient);
+  registerFindAndGetTool(server, apiClient);
 
   return server;
 }

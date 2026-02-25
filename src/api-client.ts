@@ -5,6 +5,7 @@ import {
   FindSectionResponse,
   GetItemsParams,
   GetItemsResponse,
+  FindSectionsAndItemsResponse,
   ListAwesomeListsParams,
   ListAwesomeListsResponse,
   Section,
@@ -397,30 +398,42 @@ export class AwesomeContextAPIClient {
 
   async findSectionsAndItems(
     params: FindSectionParams,
-    sectionLimit: number = 3
-  ): Promise<{ sections: FindSectionResponse; itemsBySection: Map<string, GetItemsResponse> }> {
+    options: { sectionLimit?: number; tokens?: number } = {}
+  ): Promise<FindSectionsAndItemsResponse> {
+    const { sectionLimit = 3, tokens } = options;
     this.log('findSectionsAndItems with params:', params, 'sectionLimit:', sectionLimit);
 
-    const sections = await this.findSections(params);
-    const topSections = sections.sections.slice(0, sectionLimit);
+    const sectionsResponse = await this.findSections(params);
+    const topSections = sectionsResponse.sections.slice(0, sectionLimit);
 
-    const itemResults = await Promise.all(
-      topSections.map(section =>
-        this.getItems({
-          listId: section.listId,
-          githubRepo: section.githubRepo,
-          section: section.category,
-          subcategory: section.subcategory,
-        })
-      )
+    const itemsPerSection = await Promise.all(
+      topSections.map(async (section) => {
+        try {
+          const itemsResponse = await this.getItems({
+            githubRepo: section.githubRepo,
+            section: section.category,
+            subcategory: section.subcategory,
+            tokens,
+          });
+          return {
+            section,
+            items: itemsResponse.items,
+            tokenUsage: itemsResponse.tokenUsage,
+          };
+        } catch {
+          return {
+            section,
+            items: [] as AwesomeItem[],
+            tokenUsage: { used: 0, limit: tokens ?? 10000, truncated: false },
+          };
+        }
+      })
     );
 
-    const itemsBySection = new Map<string, GetItemsResponse>();
-    topSections.forEach((section, index) => {
-      const key = `${section.listId}:${section.category}${section.subcategory ? ':' + section.subcategory : ''}`;
-      itemsBySection.set(key, itemResults[index]);
-    });
-
-    return { sections, itemsBySection };
+    return {
+      sections: sectionsResponse.sections,
+      itemsPerSection,
+      totalSections: sectionsResponse.total,
+    };
   }
 }

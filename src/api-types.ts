@@ -66,3 +66,20 @@ export interface APIGetItemsResponse {
   metadata?: RawMetadata;
   meta?: RawMetadata;
 }
+
+export interface RawList {
+  id?: string | number;
+  _id?: string | number;
+  name?: string;
+  githubRepo?: string;
+  github_repo?: string;
+  description?: string;
+  itemCount?: number;
+  item_count?: number;
+}
+
+export interface APIListListsResponse {
+  lists?: RawList[];
+  data?: RawList[];
+  total?: number;
+}

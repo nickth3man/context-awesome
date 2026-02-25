@@ -1,4 +1,4 @@
-import { Section, GetItemsResponse } from '../types.js';
+import { Section, GetItemsResponse, FindSectionsAndItemsResponse } from '../types.js';
 
 export function formatSectionResults(query: string, sections: Section[]): string {
   const formattedSections = sections
@@ -93,4 +93,50 @@ export function formatItemResults(response: GetItemsResponse): string {
       : '');
 
   return header + listDescription + formattedItems + footer;
+}
+
+export function formatFindAndGetResults(
+  query: string,
+  response: FindSectionsAndItemsResponse
+): string {
+  const lines: string[] = [`# Results for "${query}"`, ''];
+
+  lines.push(
+    `Found **${response.sections.length}** relevant section(s). Items fetched from the top ${response.itemsPerSection.length}.`,
+    ''
+  );
+
+  for (const { section, items, tokenUsage } of response.itemsPerSection) {
+    lines.push(
+      `## ${section.listName} — ${section.category}${section.subcategory ? ` > ${section.subcategory}` : ''}`,
+      `> **Repo**: \`${section.githubRepo}\` · **Items in section**: ${section.itemCount} · **Confidence**: ${(section.confidence * 100).toFixed(0)}%`,
+      ''
+    );
+
+    if (items.length === 0) {
+      lines.push('_No items could be retrieved for this section._', '');
+      continue;
+    }
+
+    for (const item of items) {
+      let entry = `### ${item.name}\n${item.description ? item.description + '\n' : ''}`;
+      entry += `**URL**: ${item.url}`;
+      if (item.githubStars) entry += `  ·  ⭐ ${item.githubStars.toLocaleString()}`;
+      if (item.tags && item.tags.length > 0) entry += `\n**Tags**: ${item.tags.join(', ')}`;
+      lines.push(entry, '');
+    }
+
+    lines.push(
+      `_Token usage for this section: ${tokenUsage.used.toLocaleString()}/${tokenUsage.limit.toLocaleString()}${tokenUsage.truncated ? ' (truncated — use `get_awesome_items` with a higher token limit for more)' : ''}_`,
+      '',
+      '---',
+      ''
+    );
+  }
+
+  lines.push(
+    `💡 To explore a specific section further, use \`get_awesome_items\` with \`githubRepo\` and \`section\` from above.`
+  );
+
+  return lines.join('\n');
 }
